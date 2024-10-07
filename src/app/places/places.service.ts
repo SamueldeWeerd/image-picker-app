@@ -3,12 +3,15 @@ import { inject, Injectable, signal } from '@angular/core';
 import { Place } from './place.model';
 import { HttpClient } from '@angular/common/http';
 import { catchError, map, tap, throwError } from 'rxjs';
+import { ErrorService } from '../shared/error.service';
 
 @Injectable({
   providedIn: 'root',
 })
 export class PlacesService {
   private userPlaces = signal<Place[]>([]);
+
+  private errorService = inject(ErrorService);
 
   private httpClient = inject(HttpClient);
 
@@ -27,9 +30,18 @@ export class PlacesService {
 
   addPlaceToUserPlaces(place: Place) {
 
-    this.userPlaces.update((oldUserPlaces) => [...oldUserPlaces, place]);
+    const prevPlaces = this.userPlaces();
 
-    return this.httpClient.put('http://localhost:3000/user-places', {placeId: place.id});
+    if (!prevPlaces.some((p) => p.id === place.id)) {
+      this.userPlaces.update((oldUserPlaces) => [...oldUserPlaces, place]);
+    }
+
+    return this.httpClient.put('http://localhost:3000/user-places', {placeId: place.id})
+    .pipe(catchError((error) => {
+      this.userPlaces.set(prevPlaces);
+      this.errorService.showError('Updating user places went wrong');
+      return throwError(() => new Error('Updating user places went wrong'))
+    }));
   }
 
   removeUserPlace(place: Place) {}
